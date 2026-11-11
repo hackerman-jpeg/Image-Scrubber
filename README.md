@@ -1,138 +1,118 @@
 # Image Scrubber
 
-Remove metadata from images before sharing them, or rebuild received images as new PNG files.
+Remove image metadata, save a new PNG, and check the result.
 
-Image Scrubber works with individual files and folders. It lists the metadata fields it found, checks every saved copy, and leaves your originals unchanged. Your images stay on your Mac.
+Works with single images or whole folders. Your originals stay unchanged. Nothing is uploaded.
 
-## What you need
+## 1. Set up
 
-- macOS with `sandbox-exec` available.
-- Python 3.10 or newer.
-- An internet connection for the first setup and later updates.
+You need **macOS** and **Python 3.10 or newer**.
 
-The first run installs the image libraries into a local `.venv` folder. After that, processing works offline.
-
-## Get started
-
-Download or clone this repository and open Terminal in its folder. Give the script permission to run once:
+Download or clone this repository. Open Terminal in the `image-scrubber` folder, then run this once:
 
 ```sh
 chmod +x scrub-image
 ```
 
-Then run it directly:
+The first time you use the tool, it downloads the image libraries. After setup, it works offline.
+
+## 2. Clean your images
+
+**One image:**
 
 ```sh
 ./scrub-image "/path/to/image.jpg"
 ```
 
-To process a folder and its subfolders:
+**A folder, including its subfolders:**
 
 ```sh
 ./scrub-image "/path/to/folder" --recursive
 ```
 
-Without `--recursive`, only images directly inside the selected folder are processed.
+**Tip:** Type `./scrub-image `, then drag an image or folder into Terminal to insert its path. For a folder, add ` --recursive` at the end.
 
-You can drag a file or folder into Terminal to insert its path after `./scrub-image`.
+## 3. Share the new copies
 
-## Where the results go
+| Folder | What it contains | Share it? |
+| --- | --- | --- |
+| `sanitized` | New PNGs that passed the checks | Yes, after checking the picture itself |
+| `sanitized-reports` | Results, original paths, and file hashes | Keep private |
 
-New images are saved in a `sanitized` folder beside the original image, or inside the folder you selected. They get new filenames that do not include the original names.
+These folders appear beside a single input image, or inside the input folder you selected.
 
-A separate `sanitized-reports` folder records what happened to each file. These reports include original paths and hashes.
+The terminal lists detected metadata fields removed and the check result for each file. If one image fails, the others continue.
 
-**Share the new PNGs, not the reports or originals.**
+## Choose image quality
 
-If one image fails, the tool reports the problem and continues with the others. A PNG is made available only after its checks pass.
+| Mode | What changes |
+| --- | --- |
+| **Hardened — default** | Removes metadata, shrinks the image, and changes fine detail to disrupt some simple hidden-data methods. Quality is reduced. |
+| **Metadata** | Removes metadata and keeps the original resolution. Does not deliberately disrupt hidden data in pixels. |
 
-To choose another output folder:
-
-```sh
-./scrub-image "/path/to/folder" --recursive --output-dir "/path/to/share"
-```
-
-Use a local Mac disk, such as an APFS volume. The output folder must support hard links.
-
-## Choose how much the image changes
-
-### Hardened mode — the default
-
-This removes metadata, resizes the picture, applies mild blur and recompression, and reduces fine color detail. The longest side is limited to 1600 pixels.
-
-These changes disrupt some simple ways of hiding data in pixels. They also reduce image quality. Small text in screenshots may become harder to read.
-
-### Metadata mode — keeps more detail
-
-This keeps the original resolution and removes file metadata without deliberately disrupting pixel-level hidden data:
+To keep more detail:
 
 ```sh
 ./scrub-image "/path/to/image.jpg" --mode metadata
 ```
 
-Both modes produce an opaque PNG. Transparent areas become white.
+Both modes save an opaque PNG. Transparent areas become white.
 
-## What the checks mean
+## What it cannot promise
 
-The tool checks that the saved PNG contains only the expected image sections, has consistent pixel data, and has no extra metadata sections or appended data.
+**This is not antivirus or a guarantee of anonymity.**
 
-It also tests its macOS processing restrictions before opening images. If those protections cannot start, it stops.
+- Names, faces, screen text, and recognizable locations remain.
+- Some hidden messages and watermarks may survive.
+- A recognizable image can still be found through reverse-image search.
 
-**Passing these checks does not mean an image is anonymous or malware-free.**
+Check the picture before posting it. For suspected malicious files, use a disposable virtual machine.
 
-Faces, names, screen text, locations, watermarks, and some hidden messages may remain. A recognizable picture can still be matched through reverse-image search.
+The tool tests its macOS restrictions before opening images and stops if protection cannot start. The checks verify file structure; they do not prove that an image is malware-free.
 
-Check and redact visible identifying details before posting. For suspected malicious files, use a disposable virtual machine rather than relying on this tool on your everyday Mac.
+[Read the security details and testing limits →](SECURITY.md)
 
-See [SECURITY.md](SECURITY.md) for the protection limits and testing status.
+## More options
 
-## Supported files
+| Task | Command |
+| --- | --- |
+| Choose an output folder | `./scrub-image "/path/to/image.jpg" --output-dir "/path/to/share"` |
+| Recheck saved PNGs | `./scrub-image "/path/to/sanitized" --verify --recursive` |
+| Test processing restrictions | `./scrub-image --self-test` |
+| Update image libraries | `./scrub-image --update` |
+| Show all options | `./scrub-image --help` |
 
-Still JPEG, PNG, GIF, WebP, BMP, classic TIFF, and HEIC/HEIF images.
+When rechecking copies made in metadata mode, add `--mode metadata`.
 
-Animated images, multipage files, videos, PDFs, SVGs, RAW files, JPEG2000, and AVIF are not supported. Hidden files, symbolic links, and recognized output folders are skipped.
+<details>
+<summary>Supported files and other requirements</summary>
 
-## Other commands
+- **Supported:** still JPEG, PNG, GIF, WebP, BMP, classic TIFF, and HEIC/HEIF.
+- **Not supported:** animation, multipage images, video, PDF, SVG, RAW, JPEG2000, and AVIF.
+- Hidden files, symbolic links, and recognized output folders are skipped.
+- macOS must provide `sandbox-exec`.
+- The output disk must support hard links. A local APFS disk works.
 
-Check previously generated images without changing them:
+</details>
 
-```sh
-./scrub-image "/path/to/sanitized" --verify --recursive
-```
+<details>
+<summary>Run the tests</summary>
 
-Add `--mode metadata` when checking copies created in metadata mode.
-
-Test the processing restrictions without opening images:
-
-```sh
-./scrub-image --self-test
-```
-
-Update the image libraries within the supported version ranges:
-
-```sh
-./scrub-image --update
-```
-
-Show all options:
-
-```sh
-./scrub-image --help
-```
-
-## Tests
-
-After setup, run the processing tests:
+After setup:
 
 ```sh
 .venv/bin/python3 -m unittest discover -s tests -v
 ```
 
-Those tests use generated images and do not test macOS enforcement. To also run the live protection tests on a supported Mac:
+The processing tests use generated images. They do not test macOS enforcement.
+
+To include live protection tests on a supported Mac:
 
 ```sh
 RUN_SANDBOX_TESTS=1 .venv/bin/python3 -m unittest discover -s tests -v
 ```
+
+</details>
 
 ## License
 
