@@ -1,96 +1,76 @@
-# Security model
+# Security
 
-Image Scrubber reconstructs still images and checks the resulting PNG structure.
-It does not identify malware, establish anonymity, or certify that pixels contain
-no hidden information.
+Image Scrubber creates a new image, removes file metadata, and checks the saved copy. Your original stays unchanged.
 
-## Processing boundary
+It reduces some privacy and security risks. It does not guarantee that an image is anonymous or free of malware.
 
-The parent process reads a bounded copy of each input and selects a decoder from
-its file signature. It never sends an original image to Pillow in the parent
-process. Each image is decoded in a fresh `sandbox-exec` worker with:
+## What it removes
 
-- No network access or child-process creation.
-- Read access to trusted runtime libraries, the decoder's source files, and its
-  private working directory. Filesystem metadata and the root directory itself
-  are readable; arbitrary user-file contents are not.
-- Writes limited to the working directory and `/dev/null`.
-- CPU, file-size, and open-file limits, disabled core dumps, and a wall timeout.
+The new copy does not carry over the original file’s:
 
-The policy includes Apple's installed `dyld-support.sb` rules when available.
-These permit the system loader to start; the broader `system.sb` is not imported.
-Trusted library and Python environment directories must not contain sensitive
-unrelated files. Dependencies execute trusted code and must come from a trusted
-source.
+- Location, camera, author, software, and capture-date metadata.
+- Comments, embedded previews, and extra file sections.
+- Data attached after the image.
+- Original filename or filesystem attributes.
 
-Before decoding, a live test requires permission denials for a private canary
-read, an outside write, a network connection, and a child-process launch. Failure
-stops processing. There is no automatic unrestricted fallback.
+The default hardened mode also resizes, slightly blurs, and recompresses the picture, then clears some color information. This reduces image quality and disrupts some simple ways of hiding data in pixels.
 
-Inputs are limited to 256 MiB, 50 million pixels, and a 32768-pixel side. The
-default wall timeout is 90 seconds per image; `--timeout` accepts 5–600 seconds.
-CPU time is capped at 120 seconds even with a longer wall timeout. These controls
-are not a hard resident-memory limit.
+## What can remain
 
-## Output verification
+The picture itself can still identify you through faces, names, addresses, reflections, screen text, account details, QR codes, or recognizable locations.
 
-Worker output is treated as untrusted. The parent rejects symlinks and special
-files, then uses a bounded parser to check:
+Some hidden messages, watermarks, and image fingerprints may survive. A recognizable picture can still be matched through reverse-image search.
 
-- Only `IHDR`, `IDAT`, and `IEND` chunks, in the expected order.
-- Valid chunk lengths and CRCs, within size and chunk-count limits.
-- One complete compressed stream with exactly the expected RGB scanlines.
-- No appended bytes or additional compressed streams.
-- A pixel digest matching the worker's intended output.
-- Hardened mode: a maximum 1600-pixel side and zeroed lowest three color bits.
-- No unexpected filesystem extended attributes.
+The tool cannot undo tracking that happened when you opened an email, visited a page, or downloaded the original.
 
-The PNG name is published atomically after verification. Files use owner-only
-permissions. Failed outputs are removed. An interrupted run may leave a hidden
-`.pending-*.tmp` file; it is not a verified output and can be deleted.
+**Check the picture and redact visible identifying details before posting it.**
 
-macOS may retain or reapply `com.apple.provenance`. This OS-managed attribute is
-allowed and reported; it is outside the PNG bytes. Local attributes may travel
-through archives or some sharing methods. Original timestamps are not preserved.
+## How it handles received images
 
-## What these checks do not establish
+Each image is processed in a separate restricted process. Those restrictions are intended to:
 
-A compromised decoder could choose arbitrary pixels and supply a matching digest.
-The parent can validate their structure, not their meaning. Low-bit clearing,
-resampling, and recompression do not remove every possible covert channel or
-resilient watermark. Visible identifying details and perceptual matches remain.
-Metadata field inventories are bounded and are not exhaustive forensic reports.
+- Block network connections and child processes.
+- Limit access to files outside its working area and trusted software libraries.
+- Prevent changes outside its temporary working area.
+- Limit processing time and file size.
 
-Reconstruction cannot undo tracking that occurred when an email, page, download
-link, or original image was accessed. A sharing platform may add metadata or
-tracking after upload. No original image is opened in a viewer by this tool.
+Before opening an image, the tool tests whether key restrictions work. If the test fails, it stops. It does not silently turn off protection.
 
-The operating system, native decoders, dependencies, and restrictions can have
-vulnerabilities. Keep them updated. The HEIF worker refuses libheif older than
-1.23.2, a documented security-fix floor; that is not a guarantee that newer
-versions are free of vulnerabilities. For suspected exploits, use a disposable
-virtual machine with networking disabled and no sensitive files.
+Image decoders and macOS can still have vulnerabilities. These restrictions are an extra precaution, not a guarantee.
 
-## Testing
+**For a file you suspect is malicious, use a disposable virtual machine with networking disabled and no sensitive files. Do not open the original first.**
 
-The processing suite uses generated benign fixtures and substitutes the restricted
-worker launcher. It tests reconstruction, reports, verification, failures, and
-cleanup; it does not test OS enforcement.
+## What the second check confirms
 
-Live integration tests are enabled with `RUN_SANDBOX_TESTS=1`. They exercise the
-actual restrictions and a complete generated-image batch. Restricted hosts may
-deny nested sandbox creation. Such failures are reported rather than converted
-to passing tests. Live enforcement of the current policy has not been validated
-in the development environment used to prepare this release.
+Before making the new PNG available, the tool checks that:
 
-## Reporting an issue
+- It contains only the expected image sections.
+- Its checksums and pixel data are consistent.
+- It has no extra metadata sections or appended data.
+- Hardened outputs meet the size limit and have the expected color bits cleared.
+- No unexpected filesystem attributes remain.
 
-For security-sensitive reports, use the repository's private vulnerability
-reporting feature if enabled. Do not post exploit files, personal images, tokens,
-or private reports in public issues. Public bug reports should use generated or
-redacted fixtures and include macOS, Python, and dependency versions.
+These checks confirm the file’s structure. They do not prove that its pixels contain no hidden information or malware.
 
-References:
+## Files you should share
 
-- [Pillow security guidance](https://pillow.readthedocs.io/en/stable/handbook/security.html)
-- [libheif security advisory](https://github.com/strukturag/libheif/security/advisories/GHSA-2jg2-4ch7-h545)
+**Share only the verified PNG copies.**
+
+The separate reports contain original file paths and hashes. Keep those reports private.
+
+macOS may attach its own `com.apple.provenance` attribute to a new file. This is outside the PNG’s contents and is allowed by the checker. Local attributes can travel through some sharing methods or archives. Websites may also add metadata after upload.
+
+## Testing and updates
+
+The processing tests use generated images. They check reconstruction, reports, error handling, and output verification. They do not test whether macOS enforces the restrictions.
+
+Separate live tests check those restrictions. The current protection profile has not yet been validated in a complete live test in the release environment. The startup self-test must pass on your Mac before processing begins.
+
+Keep macOS, Python, and the image libraries updated. Passing tests does not guarantee protection against every attack.
+
+## Reporting a security problem
+
+Use the repository’s private security reporting option if it is enabled.
+
+Do not post personal images, private reports, passwords, or working exploit files in public issues. Use a generated or redacted example when possible.
+```
