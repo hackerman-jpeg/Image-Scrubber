@@ -1,0 +1,59 @@
+(version 1)
+(deny default)
+
+; libignition opens exactly "/" as an openat() anchor before Python starts.
+; This grants access to that directory itself, not its descendants.
+(allow file-read* (literal "/"))
+
+; Modern dyld also needs executable mappings for trusted runtime libraries.
+(allow file-map-executable
+    (subpath "/System")
+    (subpath "/usr/lib")
+    (subpath "/opt/homebrew/Cellar")
+    (subpath "/usr/local/Cellar")
+    (subpath (param "RUNTIME"))
+    (subpath (param "ENVIRONMENT")))
+
+; The Python interpreter and dependencies are trusted runtime code, not inputs.
+(allow file-read-metadata)
+(allow file-read*
+    (subpath "/System")
+    (subpath "/usr/lib")
+    (subpath "/usr/share/locale")
+    (subpath "/private/var/db/dyld")
+    (subpath "/opt/homebrew/Cellar")
+    (subpath "/usr/local/Cellar")
+    (subpath (param "RUNTIME"))
+    (subpath (param "ENVIRONMENT"))
+    ; Permit decoder source files, not repository credentials or other contents.
+    (literal (param "CODE"))
+    (literal (string-append (param "CODE") "/worker_entry.py"))
+    (literal (string-append (param "CODE") "/decode_worker.py"))
+    (literal (string-append (param "CODE") "/core.py"))
+    (subpath (param "WORK"))
+    (literal "/private/etc/localtime")
+    (literal "/dev/null")
+    (literal "/dev/random")
+    (literal "/dev/urandom"))
+(allow file-write* (subpath (param "WORK")) (literal "/dev/null"))
+(allow process-exec (literal (param "PYTHON")) (literal (param "PYTHON_REAL")))
+(allow sysctl-read
+    (sysctl-name "hw.ncpu")
+    (sysctl-name "hw.activecpu")
+    (sysctl-name "hw.logicalcpu")
+    (sysctl-name "hw.physicalcpu")
+    (sysctl-name "hw.memsize")
+    (sysctl-name "hw.pagesize")
+    (sysctl-name "hw.byteorder")
+    (sysctl-name "hw.machine")
+    (sysctl-name "hw.model")
+    (sysctl-name "hw.optional.arm64")
+    (sysctl-name "hw.optional.neon")
+    (sysctl-name "kern.osrelease")
+    (sysctl-name "kern.osversion")
+    (sysctl-name "kern.ostype")
+    (sysctl-name "kern.osproductversion")
+    (sysctl-name "kern.argmax"))
+(allow signal (target self))
+
+; No network, child-process creation, general user-file reads, or outside writes.
